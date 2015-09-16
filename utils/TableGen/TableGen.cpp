@@ -41,7 +41,8 @@ enum ActionType {
   PrintEnums,
   PrintSets,
   GenOptParserDefs,
-  GenCTags
+  GenCTags,
+  GenNatInstrInfo
 };
 
 namespace {
@@ -85,6 +86,8 @@ namespace {
                                "Generate option definitions"),
                     clEnumValN(GenCTags, "gen-ctags",
                                "Generate ctags-compatible index"),
+                    clEnumValN(GenNatInstrInfo, "gen-nat-instr-info",
+                               "Generate nativity instruction descriptions"),
                     clEnumValEnd));
 
   cl::opt<std::string>
@@ -141,6 +144,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case GenOptParserDefs:
     EmitOptParser(Records, OS);
     break;
+  case GenNatInstrInfo:
+      EmitNatInstrInfo(Records, OS);
+      break;
   case PrintEnums:
   {
     for (Record *Rec : Records.getAllDerivedDefinitions(Class))
