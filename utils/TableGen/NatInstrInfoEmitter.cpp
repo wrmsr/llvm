@@ -72,6 +72,7 @@ namespace {
     };
 } // end anonymous namespace
 
+/*
 static void PrintDefList(const std::vector<Record*> &Uses,
                          unsigned Num, raw_ostream &OS) {
     OS << "static const uint16_t ImplicitList" << Num << "[] = { ";
@@ -79,6 +80,7 @@ static void PrintDefList(const std::vector<Record*> &Uses,
         OS << getQualifiedName(Uses[i]) << ", ";
     OS << "0 };\n";
 }
+*/
 
 //===----------------------------------------------------------------------===//
 // Operand Info Emission.
@@ -339,17 +341,7 @@ void NatInstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
 
 // run - Emit the main instruction description records for the target...
 void NatInstrInfoEmitter::run(raw_ostream &OS) {
-    OS << "hurf durf\n";
-
-    emitSourceFileHeader("Target Instruction Enum Values", OS);
     emitEnums(OS);
-
-    emitSourceFileHeader("Target Instruction Descriptors", OS);
-
-    OS << "\n#ifdef GET_INSTRINFO_MC_DESC\n";
-    OS << "#undef GET_INSTRINFO_MC_DESC\n";
-
-    OS << "namespace llvm {\n\n";
 
     CodeGenTarget &Target = CDP.getTargetInfo();
     const std::string &TargetName = Target.getName();
@@ -359,6 +351,7 @@ void NatInstrInfoEmitter::run(raw_ostream &OS) {
     std::map<std::vector<Record*>, unsigned> EmittedLists;
     unsigned ListNumber = 0;
 
+    /*
     // Emit all of the instruction's implicit uses and defs.
     for (const CodeGenInstruction *II : Target.instructions()) {
         Record *Inst = II->TheDef;
@@ -373,6 +366,7 @@ void NatInstrInfoEmitter::run(raw_ostream &OS) {
             if (!IL) PrintDefList(Defs, IL = ++ListNumber, OS);
         }
     }
+    */
 
     OperandInfoMapTy OperandInfoIDs;
 
@@ -528,6 +522,7 @@ void NatInstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Nu
     OS << "ULL, ";
 
     // Emit the implicit uses and defs lists...
+    // FIXME do what PrintDefList did here
     std::vector<Record*> UseList = Inst.TheDef->getValueAsListOfDefs("Uses");
     if (UseList.empty())
         OS << "nullptr, ";
@@ -566,10 +561,7 @@ void NatInstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Nu
 // emitEnums - Print out enum values for all of the instructions.
 void NatInstrInfoEmitter::emitEnums(raw_ostream &OS) {
 
-    OS << "\n#ifdef GET_INSTRINFO_ENUM\n";
-    OS << "#undef GET_INSTRINFO_ENUM\n";
-
-    OS << "namespace llvm {\n\n";
+    OS << "  instr_enums:\n";
 
     CodeGenTarget Target(Records);
 
@@ -582,25 +574,15 @@ void NatInstrInfoEmitter::emitEnums(raw_ostream &OS) {
     const std::vector<const CodeGenInstruction*> &NumberedInstructions =
             Target.getInstructionsByEnumValue();
 
-    OS << "namespace " << Namespace << " {\n";
-    OS << "  enum {\n";
     unsigned Num = 0;
     for (const CodeGenInstruction *Inst : NumberedInstructions)
-        OS << "    " << Inst->TheDef->getName() << "\t= " << Num++ << ",\n";
-    OS << "    INSTRUCTION_LIST_END = " << NumberedInstructions.size() << "\n";
-    OS << "  };\n\n";
-    OS << "namespace Sched {\n";
-    OS << "  enum {\n";
-    Num = 0;
-    for (const auto &Class : SchedModels.explicit_classes())
-        OS << "    " << Class.Name << "\t= " << Num++ << ",\n";
-    OS << "    SCHED_LIST_END = " << SchedModels.numInstrSchedClasses() << "\n";
-    OS << "  };\n";
-    OS << "} // end Sched namespace\n";
-    OS << "} // end " << Namespace << " namespace\n";
-    OS << "} // end llvm namespace \n";
+        OS << "    " << Inst->TheDef->getName() << ": " << Num++ << "\n";
+    OS << "    INSTRUCTION_LIST_END: " << NumberedInstructions.size() << "\n";
 
-    OS << "#endif // GET_INSTRINFO_ENUM\n\n";
+    OS << "  sched_enums: \n";
+    for (const auto &Class : SchedModels.explicit_classes())
+        OS << "    " << Class.Name << ": " << Num++ << "\n";
+    OS << "    SCHED_LIST_END: " << SchedModels.numInstrSchedClasses() << "\n";
 }
 
 namespace llvm {
