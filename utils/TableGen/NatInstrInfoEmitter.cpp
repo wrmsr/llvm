@@ -247,27 +247,13 @@ void NatInstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
 
     initOperandMapData(NumberedInstructions, Namespace, Operands, OperandMap);
 
-    OS << "#ifdef GET_INSTRINFO_OPERAND_ENUM\n";
-    OS << "#undef GET_INSTRINFO_OPERAND_ENUM\n";
-    OS << "namespace llvm {\n";
-    OS << "namespace " << Namespace << " {\n";
-    OS << "namespace " << OpNameNS << " { \n";
     OS << "enum {\n";
     for (const auto &Op : Operands)
         OS << "  " << Op.first << " = " << Op.second << ",\n";
 
     OS << "OPERAND_LAST";
     OS << "\n};\n";
-    OS << "} // end namespace OpName\n";
-    OS << "} // end namespace " << Namespace << "\n";
-    OS << "} // end namespace llvm\n";
-    OS << "#endif //GET_INSTRINFO_OPERAND_ENUM\n";
 
-    OS << "#ifdef GET_INSTRINFO_NAMED_OPS\n";
-    OS << "#undef GET_INSTRINFO_NAMED_OPS\n";
-    OS << "namespace llvm {\n";
-    OS << "namespace " << Namespace << " {\n";
-    OS << "LLVM_READONLY\n";
     OS << "int16_t getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIdx) {\n";
     if (!Operands.empty()) {
         OS << "  static const int16_t OperandMap [][" << Operands.size()
@@ -299,10 +285,6 @@ void NatInstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
         OS << "  return -1;\n";
     }
     OS << "}\n";
-    OS << "} // end namespace " << Namespace << "\n";
-    OS << "} // end namespace llvm\n";
-    OS << "#endif //GET_INSTRINFO_NAMED_OPS\n";
-
 }
 
 /// Generate an enum for all the operand types for this target, under the
@@ -314,11 +296,6 @@ void NatInstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
     const std::string &Namespace = Target.getInstNamespace();
     std::vector<Record *> Operands = Records.getAllDerivedDefinitions("Operand");
 
-    OS << "\n#ifdef GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
-    OS << "#undef GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
-    OS << "namespace llvm {\n";
-    OS << "namespace " << Namespace << " {\n";
-    OS << "namespace OpTypes { \n";
     OS << "enum OperandType {\n";
 
     unsigned EnumVal = 0;
@@ -329,10 +306,6 @@ void NatInstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
     }
 
     OS << "  OPERAND_TYPE_LIST_END" << "\n};\n";
-    OS << "} // end namespace OpTypes\n";
-    OS << "} // end namespace " << Namespace << "\n";
-    OS << "} // end namespace llvm\n";
-    OS << "#endif // GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
 }
 
 //===----------------------------------------------------------------------===//
@@ -414,8 +387,6 @@ void NatInstrInfoEmitter::run(raw_ostream &OS) {
     << TargetName << "InstrNameIndices, " << TargetName << "InstrNameData, "
     << NumberedInstructions.size() << ");\n}\n\n";
 
-    OS << "} // end llvm namespace \n";
-
     OS << "#endif // GET_INSTRINFO_MC_DESC\n\n";
 
     // Create a TargetInstrInfo subclass to hide the MC layer initialization.
@@ -423,20 +394,17 @@ void NatInstrInfoEmitter::run(raw_ostream &OS) {
     OS << "#undef GET_INSTRINFO_HEADER\n";
 
     std::string ClassName = TargetName + "GenInstrInfo";
-    OS << "namespace llvm {\n";
     OS << "struct " << ClassName << " : public TargetInstrInfo {\n"
     << "  explicit " << ClassName
     << "(int CFSetupOpcode = -1, int CFDestroyOpcode = -1);\n"
     << "  ~" << ClassName << "() override {}\n"
     << "};\n";
-    OS << "} // end llvm namespace \n";
 
     OS << "#endif // GET_INSTRINFO_HEADER\n\n";
 
     OS << "\n#ifdef GET_INSTRINFO_CTOR_DTOR\n";
     OS << "#undef GET_INSTRINFO_CTOR_DTOR\n";
 
-    OS << "namespace llvm {\n";
     OS << "extern const MCInstrDesc " << TargetName << "Insts[];\n";
     OS << "extern const unsigned " << TargetName << "InstrNameIndices[];\n";
     OS << "extern const char " << TargetName << "InstrNameData[];\n";
@@ -446,9 +414,6 @@ void NatInstrInfoEmitter::run(raw_ostream &OS) {
     << "  InitMCInstrInfo(" << TargetName << "Insts, " << TargetName
     << "InstrNameIndices, " << TargetName << "InstrNameData, "
     << NumberedInstructions.size() << ");\n}\n";
-    OS << "} // end llvm namespace \n";
-
-    OS << "#endif // GET_INSTRINFO_CTOR_DTOR\n\n";
 
     emitOperandNameMappings(OS, Target, NumberedInstructions);
 
@@ -465,6 +430,28 @@ void NatInstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Nu
         // Each logical operand can be multiple MI operands.
         MinOperands = Inst.Operands.back().MIOperandNo +
                       Inst.Operands.back().MINumOperands;
+
+    /*
+  unsigned short Opcode;        // The opcode number
+  unsigned short NumOperands;   // Num of args (may be more if variable_ops)
+  unsigned char NumDefs;        // Num of args that are definitions
+  unsigned char Size;           // Number of bytes in encoding.
+  unsigned short SchedClass;    // enum identifying instr sched class
+  uint64_t Flags;               // Flags identifying machine instr class
+  uint64_t TSFlags;             // Target Specific Flag values
+  const uint16_t *ImplicitUses; // Registers implicitly read by this instr
+  const uint16_t *ImplicitDefs; // Registers implicitly defined by this instr
+  const MCOperandInfo *OpInfo;  // 'NumOperands' entries about operands
+  // Subtarget feature that this is deprecated on, if any
+  // -1 implies this is not deprecated by any single feature. It may still be
+  // deprecated due to a "complex" reason, below.
+  int64_t DeprecatedFeature;
+
+  // A complex method to determine is a certain is deprecated or not, and return
+  // the reason for deprecation.
+  bool (*ComplexDeprecationInfo)(MCInst &, const MCSubtargetInfo &,
+                                 std::string &);
+     */
 
     OS << "  { ";
     OS << Num << ",\t" << MinOperands << ",\t"
